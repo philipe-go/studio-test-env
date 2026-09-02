@@ -1,4 +1,4 @@
-# Docker Services
+# Docker Services Environment Bootstrap
 
 These PowerShell scripts run MongoDB, MySQL, Redis, browser-based database UIs, an Nginx reverse proxy, and a host-native Perforce Helix Core server on Windows.
 
