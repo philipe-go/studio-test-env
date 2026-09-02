@@ -1,0 +1,71 @@
+server {
+    listen 80;
+    server_name ${SERVER_HOSTNAME}.mongodb.com;
+
+    location / {
+        proxy_pass http://mongo-express:8081;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+
+server {
+    listen 80;
+    server_name ${SERVER_HOSTNAME}.swarm.com;
+
+    location / {
+        proxy_pass http://helix-swarm:80;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+
+server {
+    listen 80;
+    server_name ${SERVER_HOSTNAME}.redis.com;
+
+    location / {
+        proxy_pass http://redisinsight:5540;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+
+server {
+    listen 80;
+    server_name ${SERVER_HOSTNAME}.mysql.com;
+
+    location / {
+        proxy_pass http://adminer:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+
+server {
+    listen 80 default_server;
+    server_name _;
+    return 404;
+}
+
+server {
+    listen 81;
+    server_name localhost;
+
+    location / {
+        default_type text/plain;
+        return 200 "nginx reverse proxy is running\n";
+    }
+}

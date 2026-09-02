@@ -1,0 +1,149 @@
+services:
+  mongodb:
+    image: mongo:8
+    container_name: mongodb
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:-admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?Set MONGO_ROOT_PASSWORD in .env}
+    ports:
+      - "${MONGO_PORT:-27017}:27017"
+    volumes:
+      - mongodb-data:/data/db
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet --eval 'db.runCommand({ ping: 1 }).ok' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    networks:
+      - mongodb-network
+
+  mongo-express:
+    image: mongo-express:1.0.2-20-alpine3.19
+    container_name: mongo-express
+    restart: unless-stopped
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    environment:
+      ME_CONFIG_MONGODB_SERVER: mongodb
+      ME_CONFIG_MONGODB_PORT: 27017
+      ME_CONFIG_MONGODB_ADMINUSERNAME: ${MONGO_ROOT_USERNAME:-admin}
+      ME_CONFIG_MONGODB_ADMINPASSWORD: ${MONGO_ROOT_PASSWORD:?Set MONGO_ROOT_PASSWORD in .env}
+      ME_CONFIG_BASICAUTH_USERNAME: ${MONGO_EXPRESS_USERNAME:-admin}
+      ME_CONFIG_BASICAUTH_PASSWORD: ${MONGO_EXPRESS_PASSWORD:?Set MONGO_EXPRESS_PASSWORD in .env}
+    expose:
+      - "8081"
+    networks:
+      - mongodb-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - redis-network
+
+  redisinsight:
+    image: redis/redisinsight:latest
+    container_name: redisinsight
+    restart: unless-stopped
+    depends_on:
+      - redis
+    expose:
+      - "5540"
+    volumes:
+      - redisinsight-data:/data
+    networks:
+      - redis-network
+
+  swarm:
+    image: perforce/helix-swarm:latest
+    container_name: helix-swarm
+    restart: unless-stopped
+    depends_on:
+      - redis
+    environment:
+      P4D_PORT: ${P4D_PORT:?Set P4D_PORT in .env}
+      P4D_SUPER: ${P4D_SUPER:?Set P4D_SUPER in .env}
+      P4D_SUPER_PASSWD: ${P4D_SUPER_PASSWD:?Set P4D_SUPER_PASSWD in .env}
+      SWARM_USER: ${SWARM_USER:-swarm}
+      SWARM_PASSWD: ${SWARM_PASSWD:?Set SWARM_PASSWD in .env}
+      SWARM_HOST: ${SWARM_HOST:?Set SWARM_HOST in .env}
+      SWARM_REDIS: redis
+      SWARM_REDIS_PORT: 6379
+      SWARM_REDIS_PASSWD: ${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
+    expose:
+      - "80"
+    volumes:
+      - swarm-data:/opt/perforce/swarm/data
+      - ./certs/ssl-cert-snakeoil.pem:/etc/ssl/certs/ssl-cert-snakeoil.pem:ro
+      - ./certs/ssl-cert-snakeoil.key:/etc/ssl/private/ssl-cert-snakeoil.key:ro
+    networks:
+      - redis-network
+
+  mysql:
+    image: mysql:8.4
+    container_name: mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-}
+      MYSQL_USER: ${MYSQL_USER:-}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-}
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    networks:
+      - mysql-network
+
+  adminer:
+    image: adminer:4.8.1
+    container_name: adminer
+    restart: unless-stopped
+    depends_on:
+      - mysql
+    expose:
+      - "8080"
+    networks:
+      - mysql-network
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: nginx-reverse-proxy
+    restart: unless-stopped
+    depends_on:
+      - mongo-express
+      - redisinsight
+      - adminer
+      - swarm
+    environment:
+      SERVER_HOSTNAME: ${SERVER_HOSTNAME:?Set SERVER_HOSTNAME in .env}
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "81:81"
+    volumes:
+      - ./nginx-compose.conf.template:/etc/nginx/templates/default.conf.template:ro
+    networks:
+      - mongodb-network
+      - redis-network
+      - mysql-network
+
+volumes:
+  mongodb-data:
+  redis-data:
+  redisinsight-data:
+  mysql-data:
+  swarm-data:
+
+networks:
+  mongodb-network:
+  redis-network:
+  mysql-network:
